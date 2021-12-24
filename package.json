@@ -25,16 +25,20 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@actions/core": "^1.6.0"
+    "@actions/core": "^1.6.0",
+    "@actions/github": "^5.0.0",
+    "node-fetch": "^2.6.6",
+    "parse-diff": "^0.9.0"
   },
   "devDependencies": {
     "@types/node": "^16.10.5",
+    "@types/node-fetch": "^2.5.12",
     "@typescript-eslint/parser": "^5.0.0",
     "@vercel/ncc": "^0.31.1",
     "eslint": "^7.32.0",
     "eslint-plugin-github": "^4.3.2",
     "eslint-plugin-jest": "^25.0.5",
-    "jest": "^27.2.5",
+    "jest": "^27.4.5",
     "js-yaml": "^4.1.0",
     "prettier": "2.4.1",
     "ts-jest": "^27.0.5",
