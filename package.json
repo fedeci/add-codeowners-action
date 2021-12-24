@@ -25,10 +25,14 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@actions/core": "^1.6.0"
+    "@actions/core": "^1.6.0",
+    "@actions/github": "^5.0.0",
+    "node-fetch": "^2.6.6",
+    "parse-diff": "^0.9.0"
   },
   "devDependencies": {
     "@types/node": "^16.10.5",
+    "@types/node-fetch": "^3.0.3",
     "@typescript-eslint/parser": "^5.0.0",
     "@vercel/ncc": "^0.31.1",
     "eslint": "^7.32.0",
