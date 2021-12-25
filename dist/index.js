@@ -72,6 +72,7 @@ function run() {
                     return;
                 }
                 const newFiles = yield addedFiles(pullData.diff_url);
+                console.warn({ newFiles });
                 // assert that there are new files in the PR
                 if (!newFiles.length)
                     return;
@@ -80,8 +81,11 @@ function run() {
                     baseBranchName = (yield octokit.rest.repos.get(Object.assign({}, context.repo)))
                         .data.default_branch;
                 }
+                console.warn({ baseBranchName });
                 const { commit: { tree: lastCommitTree }, sha: lastCommitSha } = (yield octokit.rest.repos.listCommits(Object.assign(Object.assign({}, context.repo), { sha: baseBranchName, per_page: 1 }))).data[0];
+                console.warn({ lastCommitSha, lastCommitTree });
                 const pullAuthorName = (_b = pullData.user) === null || _b === void 0 ? void 0 : _b.login;
+                console.warn({ pullAuthorName });
                 // eslint-disable-next-line no-inner-declarations
                 function getCurrentCodeowners() {
                     return __awaiter(this, void 0, void 0, function* () {
@@ -93,6 +97,7 @@ function run() {
                     });
                 }
                 const currentCodeowners = yield getCurrentCodeowners();
+                console.warn({ currentCodeowners });
                 const newTree = yield octokit.rest.git.createTree(Object.assign(Object.assign({}, context.repo), { base_tree: lastCommitTree.sha, tree: [
                         {
                             path: codeownersPath,
@@ -103,9 +108,12 @@ function run() {
                             }, currentCodeowners)
                         }
                     ] }));
+                console.log('tree created');
                 const newCommit = yield octokit.rest.git.createCommit(Object.assign(Object.assign({}, context.repo), { message: `chore: add ${pullAuthorName} to CODEOWNERS`, tree: newTree.data.sha, parents: [lastCommitSha] }));
+                console.log('commit created');
                 yield octokit.rest.git.updateRef(Object.assign(Object.assign({}, context.repo), { ref: `heads/${newBranchName}/${pullNumber}`, sha: newCommit.data.sha }));
-                yield octokit.rest.pulls.create(Object.assign(Object.assign({}, context.repo), { title: `chore: add ${pullAuthorName} to CODEOWNERS`, body: `Reference #${pullNumber}\n/cc @${pullAuthorName}`, base: newBranchName, head: `${baseBranchName}/${pullNumber}` }));
+                console.log('ref updated');
+                yield octokit.rest.pulls.create(Object.assign(Object.assign({}, context.repo), { title: `chore: add ${pullAuthorName} to CODEOWNERS`, body: `Reference #${pullNumber}\n/cc @${pullAuthorName}`, base: baseBranchName, head: `${newBranchName}/${pullNumber}` }));
             }
         }
         catch (error) {

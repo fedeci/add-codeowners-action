@@ -39,6 +39,7 @@ async function run(): Promise<void> {
       }
 
       const newFiles = await addedFiles(pullData.diff_url)
+      console.warn({ newFiles })
 
       // assert that there are new files in the PR
       if (!newFiles.length) return
@@ -48,6 +49,7 @@ async function run(): Promise<void> {
         baseBranchName = (await octokit.rest.repos.get({ ...context.repo }))
           .data.default_branch
       }
+      console.warn({ baseBranchName })
 
       const {
         commit: { tree: lastCommitTree },
@@ -60,7 +62,11 @@ async function run(): Promise<void> {
         })
       ).data[0]
 
+      console.warn({ lastCommitSha, lastCommitTree })
+
       const pullAuthorName = pullData.user?.login
+
+      console.warn({ pullAuthorName })
 
       // eslint-disable-next-line no-inner-declarations
       async function getCurrentCodeowners(): Promise<string> {
@@ -77,6 +83,8 @@ async function run(): Promise<void> {
 
       const currentCodeowners = await getCurrentCodeowners()
 
+      console.warn({ currentCodeowners })
+
       const newTree = await octokit.rest.git.createTree({
         ...context.repo,
         base_tree: lastCommitTree.sha,
@@ -92,6 +100,8 @@ async function run(): Promise<void> {
         ]
       })
 
+      console.log('tree created')
+
       const newCommit = await octokit.rest.git.createCommit({
         ...context.repo,
         message: `chore: add ${pullAuthorName} to CODEOWNERS`,
@@ -99,18 +109,22 @@ async function run(): Promise<void> {
         parents: [lastCommitSha]
       })
 
+      console.log('commit created')
+
       await octokit.rest.git.updateRef({
         ...context.repo,
         ref: `heads/${newBranchName}/${pullNumber}`,
         sha: newCommit.data.sha
       })
 
+      console.log('ref updated')
+
       await octokit.rest.pulls.create({
         ...context.repo,
         title: `chore: add ${pullAuthorName} to CODEOWNERS`,
         body: `Reference #${pullNumber}\n/cc @${pullAuthorName}`,
-        base: newBranchName,
-        head: `${baseBranchName}/${pullNumber}`
+        base: baseBranchName,
+        head: `${newBranchName}/${pullNumber}`
       })
     }
   } catch (error) {
