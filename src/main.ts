@@ -13,6 +13,7 @@ async function addedFiles(diffUrl: string): Promise<string[]> {
 async function run(): Promise<void> {
   const ghToken = core.getInput('token', { required: true })
   let baseBranchName = core.getInput('baseBranch')
+  // TODO: add unique hash after the newbranchname base
   const newBranchName = core.getInput('newBranchName') || 'auto-codeowners'
   const codeownersPath = core.getInput('codeownersPath') || 'CODEOWNERS.md'
   const context = github.context
@@ -28,6 +29,13 @@ async function run(): Promise<void> {
         pull_number: pullNumber
       })
     ).data
+
+    if (
+      !pullData.body ||
+      !/- \[x\] Add me as codeowner of new files/g.test(pullData.body)
+    ) {
+      return
+    }
 
     const newFiles = await addedFiles(pullData.diff_url)
 
