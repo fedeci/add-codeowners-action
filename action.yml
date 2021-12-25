@@ -1,11 +1,16 @@
-name: 'Your name here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
+name: 'add-codeowners-action'
+description: 'A GitHub action to automatically create a PR with the updated CODEOWNERS each time a new file is added in a PR'
+author: 'Federico Ciardi'
 inputs:
-  milliseconds: # change this
+  token:
     required: true
-    description: 'input description here'
-    default: 'default value if applicable'
+    description: 'A GitHub PAT with write permissions for the repo'
+  baseBranchName:
+    description: 'The base branch on top of which create the PRs'
+  newBranchName:
+    description: 'The branch name for the PRs'
+  codeownersPath:
+    description: 'The local path of the CODEOWNERS file in the repo (Do not include trailing dotslash)'
 runs:
-  using: 'node12'
+  using: 'node16'
   main: 'dist/index.js'
