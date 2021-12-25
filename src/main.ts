@@ -115,7 +115,7 @@ async function run(): Promise<void> {
 
       await octokit.rest.git.createRef({
         ...context.repo,
-        ref: `heads/${newBranchName}/${pullNumber}`,
+        ref: `refs/heads/${newBranchName}/${pullNumber}`,
         sha: newCommit.data.sha
       })
 

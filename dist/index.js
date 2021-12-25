@@ -114,7 +114,7 @@ function run() {
                 console.log('tree created');
                 const newCommit = yield octokit.rest.git.createCommit(Object.assign(Object.assign({}, context.repo), { message: `chore: add ${pullAuthorName} to CODEOWNERS`, tree: newTree.data.sha, parents: [lastCommitSha] }));
                 console.log('commit created');
-                yield octokit.rest.git.createRef(Object.assign(Object.assign({}, context.repo), { ref: `heads/${newBranchName}/${pullNumber}`, sha: newCommit.data.sha }));
+                yield octokit.rest.git.createRef(Object.assign(Object.assign({}, context.repo), { ref: `refs/heads/${newBranchName}/${pullNumber}`, sha: newCommit.data.sha }));
                 console.log('ref updated');
                 yield octokit.rest.pulls.create(Object.assign(Object.assign({}, context.repo), { title: `chore: add ${pullAuthorName} to CODEOWNERS`, body: `Reference #${pullNumber}\n/cc @${pullAuthorName}`, base: baseBranchName, head: `${newBranchName}/${pullNumber}` }));
             }
