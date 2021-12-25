@@ -13,7 +13,6 @@ async function addedFiles(diffUrl: string): Promise<string[]> {
 async function run(): Promise<void> {
   const ghToken = core.getInput('token', { required: true })
   let baseBranchName = core.getInput('baseBranch')
-  // TODO: add unique hash after the newbranchname base
   const newBranchName = core.getInput('newBranchName') || 'auto-codeowners'
   const codeownersPath = core.getInput('codeownersPath') || 'CODEOWNERS.md'
   const context = github.context
@@ -30,6 +29,7 @@ async function run(): Promise<void> {
       })
     ).data
 
+    // assert that the PR author effectively wants to be added as codeowner
     if (
       !pullData.body ||
       !/- \[x\] Add me as codeowner of new files/g.test(pullData.body)
@@ -39,7 +39,7 @@ async function run(): Promise<void> {
 
     const newFiles = await addedFiles(pullData.diff_url)
 
-    // TODO: check if a tick is added to the PR body
+    // assert that there are new files in the PR
     if (!newFiles.length) return
 
     // Commit updated CODEOWNERS file and create a PR
@@ -70,7 +70,7 @@ async function run(): Promise<void> {
       })
       if (Array.isArray(data) || data.type !== 'file')
         throw new Error(`Resource at path ${codeownersPath} is not a file.`)
-      // @ts-expect-error Currently the API is badly typed an for files content still is unset
+      // @ts-expect-error Currently the API is badly typed and content is still unset for files
       return (data.content as string) || ''
     }
 
@@ -100,7 +100,7 @@ async function run(): Promise<void> {
 
     await octokit.rest.git.updateRef({
       ...context.repo,
-      ref: `heads/${newBranchName}`,
+      ref: `heads/${newBranchName}/${pullNumber}`,
       sha: newCommit.data.sha
     })
 
@@ -108,8 +108,8 @@ async function run(): Promise<void> {
       ...context.repo,
       title: `chore: add ${pullAuthorName} to CODEOWNERS`,
       body: `Reference #${pullNumber}\n/cc @${pullAuthorName}`,
-      base: newBranchName, // create a new branch in the repo with the changes
-      head: baseBranchName // get the current main head
+      base: newBranchName,
+      head: `${baseBranchName}/${pullNumber}`
     })
   }
 }
