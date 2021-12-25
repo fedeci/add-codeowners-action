@@ -89,7 +89,10 @@ function run() {
                         if (Array.isArray(data) || data.type !== 'file')
                             throw new Error(`Resource at path ${codeownersPath} is not a file.`);
                         // @ts-expect-error Currently the API is badly typed and content is still unset for files
-                        return data.content || '';
+                        if (!data.content)
+                            return '';
+                        // @ts-expect-error See above
+                        return Buffer.from(data.content, 'base64').toString('utf8');
                     });
                 }
                 const currentCodeowners = yield getCurrentCodeowners();
@@ -104,8 +107,8 @@ function run() {
                         }
                     ] }));
                 const newCommit = yield octokit.rest.git.createCommit(Object.assign(Object.assign({}, context.repo), { message: `chore: add ${pullAuthorName} to CODEOWNERS`, tree: newTree.data.sha, parents: [lastCommitSha] }));
-                yield octokit.rest.git.updateRef(Object.assign(Object.assign({}, context.repo), { ref: `heads/${newBranchName}/${pullNumber}`, sha: newCommit.data.sha }));
-                yield octokit.rest.pulls.create(Object.assign(Object.assign({}, context.repo), { title: `chore: add ${pullAuthorName} to CODEOWNERS`, body: `Reference #${pullNumber}\n/cc @${pullAuthorName}`, base: newBranchName, head: `${baseBranchName}/${pullNumber}` }));
+                yield octokit.rest.git.createRef(Object.assign(Object.assign({}, context.repo), { ref: `refs/heads/${newBranchName}/${pullNumber}`, sha: newCommit.data.sha }));
+                yield octokit.rest.pulls.create(Object.assign(Object.assign({}, context.repo), { title: `chore: add ${pullAuthorName} to CODEOWNERS`, body: `Reference #${pullNumber}\n/cc @${pullAuthorName}`, base: baseBranchName, head: `${newBranchName}/${pullNumber}` }));
             }
         }
         catch (error) {

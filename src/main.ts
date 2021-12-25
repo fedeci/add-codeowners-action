@@ -72,7 +72,9 @@ async function run(): Promise<void> {
         if (Array.isArray(data) || data.type !== 'file')
           throw new Error(`Resource at path ${codeownersPath} is not a file.`)
         // @ts-expect-error Currently the API is badly typed and content is still unset for files
-        return (data.content as string) || ''
+        if (!data.content) return ''
+        // @ts-expect-error See above
+        return Buffer.from(data.content as string, 'base64').toString('utf8')
       }
 
       const currentCodeowners = await getCurrentCodeowners()
@@ -99,9 +101,9 @@ async function run(): Promise<void> {
         parents: [lastCommitSha]
       })
 
-      await octokit.rest.git.updateRef({
+      await octokit.rest.git.createRef({
         ...context.repo,
-        ref: `heads/${newBranchName}/${pullNumber}`,
+        ref: `refs/heads/${newBranchName}/${pullNumber}`,
         sha: newCommit.data.sha
       })
 
@@ -109,8 +111,8 @@ async function run(): Promise<void> {
         ...context.repo,
         title: `chore: add ${pullAuthorName} to CODEOWNERS`,
         body: `Reference #${pullNumber}\n/cc @${pullAuthorName}`,
-        base: newBranchName,
-        head: `${baseBranchName}/${pullNumber}`
+        base: baseBranchName,
+        head: `${newBranchName}/${pullNumber}`
       })
     }
   } catch (error) {
