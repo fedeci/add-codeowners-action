@@ -34,22 +34,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
 const github = __importStar(__nccwpck_require__(5438));
-const node_fetch_1 = __importDefault(__nccwpck_require__(467));
-const parse_diff_1 = __importDefault(__nccwpck_require__(4833));
-function addedFiles(diffUrl) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const diffText = yield (yield (0, node_fetch_1.default)(diffUrl)).text();
-        return (0, parse_diff_1.default)(diffText)
-            .filter(file => file.new === true)
-            .map(file => file.to);
-    });
-}
+const utils_1 = __nccwpck_require__(918);
 function run() {
     var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
@@ -66,49 +54,44 @@ function run() {
                 if (!pullNumber)
                     throw new Error('Missing PR number.');
                 const pullData = (yield octokit.rest.pulls.get(Object.assign(Object.assign({}, context.repo), { pull_number: pullNumber }))).data;
-                // assert that the PR author effectively wants to be added as codeowner
-                if (!pullData.body ||
-                    !/- \[x\] Add me as codeowner of new files/g.test(pullData.body)) {
-                    return;
+                if (context.action === 'opened' || context.action === 'reopened') {
+                    // assert that the PR author effectively wants to be added as codeowner
+                    if (!(0, utils_1.userWantsToBeCodeowner)(pullData.body))
+                        return;
+                    const newFiles = yield (0, utils_1.gitAddedFiles)(pullData.diff_url);
+                    // assert that there are new files in the PR
+                    if (!newFiles.length)
+                        return;
+                    // Commit updated CODEOWNERS file and create a PR
+                    if (!baseBranchName) {
+                        const { data: { default_branch } } = yield octokit.rest.repos.get(Object.assign({}, context.repo));
+                        baseBranchName = default_branch;
+                    }
+                    const { commit: { tree: lastCommitTree }, sha: lastCommitSha } = (yield octokit.rest.repos.listCommits(Object.assign(Object.assign({}, context.repo), { sha: baseBranchName, per_page: 1 }))).data[0];
+                    const pullAuthorName = (_b = pullData.user) === null || _b === void 0 ? void 0 : _b.login;
+                    const currentCodeowners = yield (0, utils_1.getCodeowners)(octokit, context.repo, lastCommitSha, codeownersPath);
+                    const newTree = yield octokit.rest.git.createTree(Object.assign(Object.assign({}, context.repo), { base_tree: lastCommitTree.sha, tree: [
+                            {
+                                path: codeownersPath,
+                                mode: '100644',
+                                content: (0, utils_1.updateCodeowners)(currentCodeowners, newFiles, pullAuthorName)
+                            }
+                        ] }));
+                    const newCommit = yield octokit.rest.git.createCommit(Object.assign(Object.assign({}, context.repo), { message: `chore: add ${pullAuthorName} to CODEOWNERS`, tree: newTree.data.sha, parents: [lastCommitSha] }));
+                    yield octokit.rest.git.createRef(Object.assign(Object.assign({}, context.repo), { ref: `refs/heads/${(0, utils_1.branchName)(newBranchName, pullNumber)}`, sha: newCommit.data.sha }));
+                    yield octokit.rest.pulls.create(Object.assign(Object.assign({}, context.repo), { title: `chore: add ${pullAuthorName} to CODEOWNERS`, body: `Reference #${pullNumber}\n/cc @${pullAuthorName}`, base: baseBranchName, head: (0, utils_1.branchName)(newBranchName, pullNumber) }));
                 }
-                const newFiles = yield addedFiles(pullData.diff_url);
-                // assert that there are new files in the PR
-                if (!newFiles.length)
-                    return;
-                // Commit updated CODEOWNERS file and create a PR
-                if (!baseBranchName) {
-                    baseBranchName = (yield octokit.rest.repos.get(Object.assign({}, context.repo)))
-                        .data.default_branch;
+                else if (context.action === 'closed') {
+                    try {
+                        yield octokit.rest.git.deleteRef(Object.assign(Object.assign({}, context.repo), { ref: `refs/heads/${(0, utils_1.branchName)(newBranchName, pullNumber)}` }));
+                    }
+                    catch (_c) {
+                        // do nothing if e.g. the ref does not exist
+                    }
                 }
-                const { commit: { tree: lastCommitTree }, sha: lastCommitSha } = (yield octokit.rest.repos.listCommits(Object.assign(Object.assign({}, context.repo), { sha: baseBranchName, per_page: 1 }))).data[0];
-                const pullAuthorName = (_b = pullData.user) === null || _b === void 0 ? void 0 : _b.login;
-                // eslint-disable-next-line no-inner-declarations
-                function getCurrentCodeowners() {
-                    return __awaiter(this, void 0, void 0, function* () {
-                        const { data } = yield octokit.rest.repos.getContent(Object.assign(Object.assign({}, context.repo), { path: codeownersPath, ref: lastCommitSha }));
-                        if (Array.isArray(data) || data.type !== 'file')
-                            throw new Error(`Resource at path ${codeownersPath} is not a file.`);
-                        // @ts-expect-error Currently the API is badly typed and content is still unset for files
-                        if (!data.content)
-                            return '';
-                        // @ts-expect-error See above
-                        return Buffer.from(data.content, 'base64').toString('utf8');
-                    });
+                else if (context.action === 'edited') {
+                    // refresh the PR
                 }
-                const currentCodeowners = yield getCurrentCodeowners();
-                const newTree = yield octokit.rest.git.createTree(Object.assign(Object.assign({}, context.repo), { base_tree: lastCommitTree.sha, tree: [
-                        {
-                            path: codeownersPath,
-                            mode: '100644',
-                            content: newFiles.reduce((current, newFile) => {
-                                // TODO: check if the last character is a newline
-                                return `${current}${newFile} @${pullAuthorName}\n`;
-                            }, currentCodeowners)
-                        }
-                    ] }));
-                const newCommit = yield octokit.rest.git.createCommit(Object.assign(Object.assign({}, context.repo), { message: `chore: add ${pullAuthorName} to CODEOWNERS`, tree: newTree.data.sha, parents: [lastCommitSha] }));
-                yield octokit.rest.git.createRef(Object.assign(Object.assign({}, context.repo), { ref: `refs/heads/${newBranchName}/${pullNumber}`, sha: newCommit.data.sha }));
-                yield octokit.rest.pulls.create(Object.assign(Object.assign({}, context.repo), { title: `chore: add ${pullAuthorName} to CODEOWNERS`, body: `Reference #${pullNumber}\n/cc @${pullAuthorName}`, base: baseBranchName, head: `${newBranchName}/${pullNumber}` }));
             }
         }
         catch (error) {
@@ -117,6 +100,70 @@ function run() {
     });
 }
 run();
+
+
+/***/ }),
+
+/***/ 918:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.updateCodeowners = exports.userWantsToBeCodeowner = exports.branchName = exports.getCodeowners = exports.gitAddedFiles = void 0;
+const node_fetch_1 = __importDefault(__nccwpck_require__(467));
+const parse_diff_1 = __importDefault(__nccwpck_require__(4833));
+function gitAddedFiles(diffUrl) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const diffText = yield (yield (0, node_fetch_1.default)(diffUrl)).text();
+        return (0, parse_diff_1.default)(diffText)
+            .filter(file => file.new === true)
+            .map(file => file.to);
+    });
+}
+exports.gitAddedFiles = gitAddedFiles;
+/**
+ *
+ * @param repo A repo object containing the owner and the name of the repo
+ * @param sha The sha1
+ * @param path The path to the codeowners file
+ */
+function getCodeowners(octokit, repo, sha, path) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield octokit.rest.repos.getContent(Object.assign(Object.assign({}, repo), { path, ref: sha }));
+        if (Array.isArray(data) || data.type !== 'file')
+            throw new Error(`Resource at path ${path} is not a file.`);
+        // @ts-expect-error Currently the API is badly typed and content is still unset for files
+        return Buffer.from(data.content || '', 'base64').toString('utf8');
+    });
+}
+exports.getCodeowners = getCodeowners;
+function branchName(prefix, hash) {
+    return `${prefix}/${hash}`;
+}
+exports.branchName = branchName;
+function userWantsToBeCodeowner(pullBody) {
+    if (!pullBody)
+        return false;
+    return /- \[x\] Add me as codeowner of new files/g.test(pullBody);
+}
+exports.userWantsToBeCodeowner = userWantsToBeCodeowner;
+function updateCodeowners(oldContent, newFiles, pullAuthorName) {
+    return newFiles.reduce((current, newFile) => `${current}${newFile} @${pullAuthorName}\n`, oldContent.at(-1) === '\n' ? oldContent : `${oldContent}\n`);
+}
+exports.updateCodeowners = updateCodeowners;
 
 
 /***/ }),
