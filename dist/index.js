@@ -54,7 +54,9 @@ function run() {
                 if (!pullNumber)
                     throw new Error('Missing PR number.');
                 const pullData = (yield octokit.rest.pulls.get(Object.assign(Object.assign({}, context.repo), { pull_number: pullNumber }))).data;
-                if (context.action === 'opened' || context.action === 'reopened') {
+                if (context.action === 'opened' ||
+                    context.action === 'reopened' ||
+                    context.action === 'synchronize') {
                     // assert that the PR author effectively wants to be added as codeowner
                     if (!(0, utils_1.userWantsToBeCodeowner)(pullData.body))
                         return;

@@ -26,7 +26,11 @@ async function run(): Promise<void> {
         })
       ).data
 
-      if (context.action === 'opened' || context.action === 'reopened') {
+      if (
+        context.action === 'opened' ||
+        context.action === 'reopened' ||
+        context.action === 'synchronize'
+      ) {
         // assert that the PR author effectively wants to be added as codeowner
         if (!userWantsToBeCodeowner(pullData.body)) return
 
