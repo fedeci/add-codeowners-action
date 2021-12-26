@@ -1,3 +1,4 @@
+import * as core from '@actions/core'
 import * as github from '@actions/github'
 import { RequestError } from '@octokit/request-error'
 import fetch from 'node-fetch'
@@ -73,6 +74,8 @@ export async function createOrUpdateCodeownersPr(
   const newFiles = await gitAddedFiles(pullData.diff_url)
   if (!newFiles.length) return
 
+  core.debug(`New files: ${newFiles}`)
+
   const context = github.context
 
   // Commit updated CODEOWNERS file and add/update ref
@@ -82,6 +85,8 @@ export async function createOrUpdateCodeownersPr(
     } = await octokit.rest.repos.get({ ...context.repo })
     baseBranchName = default_branch
   }
+
+  core.debug(`Base branch name: ${baseBranchName}`)
 
   const {
     commit: { tree: lastCommitTree },
@@ -94,7 +99,12 @@ export async function createOrUpdateCodeownersPr(
     })
   ).data[0]
 
+  core.debug(`Last base branch commit-tree sha: ${lastCommitTree.sha}`)
+  core.debug(`Last base branch commit sha: ${lastCommitSha}`)
+
   const pullAuthorName = pullData.user?.login
+
+  core.debug(`Pull author name: ${pullAuthorName}`)
 
   const currentCodeowners = await getCodeowners(
     octokit,
@@ -115,12 +125,16 @@ export async function createOrUpdateCodeownersPr(
     ]
   })
 
+  core.debug(`New tree sha: ${newTree.data.sha}`)
+
   const newCommit = await octokit.rest.git.createCommit({
     ...context.repo,
     message: `chore: add ${pullAuthorName} to CODEOWNERS`,
     tree: newTree.data.sha,
     parents: [lastCommitSha]
   })
+
+  core.debug(`New commit sha: ${newCommit.data.sha}`)
 
   const newRef = `refs/heads/${branchName(newBranchName, pullData.number)}`
   try {
@@ -130,6 +144,7 @@ export async function createOrUpdateCodeownersPr(
       sha: newCommit.data.sha,
       force: true
     })
+    core.debug(`Ref updated: ${newRef}`)
   } catch (error) {
     if ((error as RequestError).status === 404) {
       await octokit.rest.git.createRef({
@@ -137,6 +152,7 @@ export async function createOrUpdateCodeownersPr(
         ref: newRef,
         sha: newCommit.data.sha
       })
+      core.debug(`New ref created: ${newRef}`)
     }
     throw error
   }
@@ -147,6 +163,9 @@ export async function createOrUpdateCodeownersPr(
       head: branchName(newBranchName, pullData.number)
     })
   ).data
+  core.debug(
+    `Found PRs from the base branch: ${pullsFromRef.map(p => p.number)}`
+  )
 
   if (!pullsFromRef.length) {
     await octokit.rest.pulls.create({

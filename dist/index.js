@@ -131,6 +131,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createOrUpdateCodeownersPr = exports.updateCodeowners = exports.userWantsToBeCodeowner = exports.branchName = exports.getCodeowners = exports.gitAddedFiles = void 0;
+const core = __importStar(__nccwpck_require__(2186));
 const github = __importStar(__nccwpck_require__(5438));
 const node_fetch_1 = __importDefault(__nccwpck_require__(467));
 const parse_diff_1 = __importDefault(__nccwpck_require__(4833));
@@ -180,14 +181,19 @@ function createOrUpdateCodeownersPr(octokit, newBranchName, baseBranchName, code
         const newFiles = yield gitAddedFiles(pullData.diff_url);
         if (!newFiles.length)
             return;
+        core.debug(`New files: ${newFiles}`);
         const context = github.context;
         // Commit updated CODEOWNERS file and add/update ref
         if (!baseBranchName) {
             const { data: { default_branch } } = yield octokit.rest.repos.get(Object.assign({}, context.repo));
             baseBranchName = default_branch;
         }
+        core.debug(`Base branch name: ${baseBranchName}`);
         const { commit: { tree: lastCommitTree }, sha: lastCommitSha } = (yield octokit.rest.repos.listCommits(Object.assign(Object.assign({}, context.repo), { sha: baseBranchName, per_page: 1 }))).data[0];
+        core.debug(`Last base branch commit-tree sha: ${lastCommitTree.sha}`);
+        core.debug(`Last base branch commit sha: ${lastCommitSha}`);
         const pullAuthorName = (_a = pullData.user) === null || _a === void 0 ? void 0 : _a.login;
+        core.debug(`Pull author name: ${pullAuthorName}`);
         const currentCodeowners = yield getCodeowners(octokit, context.repo, lastCommitSha, codeownersPath);
         const newTree = yield octokit.rest.git.createTree(Object.assign(Object.assign({}, context.repo), { base_tree: lastCommitTree.sha, tree: [
                 {
@@ -196,18 +202,23 @@ function createOrUpdateCodeownersPr(octokit, newBranchName, baseBranchName, code
                     content: updateCodeowners(currentCodeowners, newFiles, pullAuthorName)
                 }
             ] }));
+        core.debug(`New tree sha: ${newTree.data.sha}`);
         const newCommit = yield octokit.rest.git.createCommit(Object.assign(Object.assign({}, context.repo), { message: `chore: add ${pullAuthorName} to CODEOWNERS`, tree: newTree.data.sha, parents: [lastCommitSha] }));
+        core.debug(`New commit sha: ${newCommit.data.sha}`);
         const newRef = `refs/heads/${branchName(newBranchName, pullData.number)}`;
         try {
             yield octokit.rest.git.updateRef(Object.assign(Object.assign({}, context.repo), { ref: newRef, sha: newCommit.data.sha, force: true }));
+            core.debug(`Ref updated: ${newRef}`);
         }
         catch (error) {
             if (error.status === 404) {
                 yield octokit.rest.git.createRef(Object.assign(Object.assign({}, context.repo), { ref: newRef, sha: newCommit.data.sha }));
+                core.debug(`New ref created: ${newRef}`);
             }
             throw error;
         }
         const pullsFromRef = (yield octokit.rest.pulls.list(Object.assign(Object.assign({}, context.repo), { head: branchName(newBranchName, pullData.number) }))).data;
+        core.debug(`Found PRs from the base branch: ${pullsFromRef.map(p => p.number)}`);
         if (!pullsFromRef.length) {
             yield octokit.rest.pulls.create(Object.assign(Object.assign({}, context.repo), { title: `chore: add ${pullAuthorName} to CODEOWNERS`, body: `Reference #${pullData.number}\n/cc @${pullAuthorName}`, base: baseBranchName, head: branchName(newBranchName, pullData.number) }));
         }
