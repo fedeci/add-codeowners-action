@@ -1,4 +1,5 @@
-import type * as github from '@actions/github'
+import * as github from '@actions/github'
+import { RequestError } from '@octokit/request-error'
 import fetch from 'node-fetch'
 import parseDiff from 'parse-diff'
 
@@ -50,4 +51,110 @@ export function updateCodeowners(
     (current, newFile) => `${current}${newFile} @${pullAuthorName}\n`,
     oldContent.at(-1) === '\n' ? oldContent : `${oldContent}\n`
   )
+}
+
+type PullDataUser = Record<string, unknown> & {
+  login: string
+}
+type PullData = Record<string, unknown> & {
+  diff_url: string
+  user: PullDataUser | null
+  number: number
+}
+
+export async function createOrUpdateCodeownersPr(
+  octokit: ReturnType<typeof github.getOctokit>,
+  newBranchName: string,
+  baseBranchName: string,
+  codeownersPath: string,
+  pullData: PullData
+): Promise<void> {
+  // check if there is any new file in the PR
+  const newFiles = await gitAddedFiles(pullData.diff_url)
+  if (!newFiles.length) return
+
+  const context = github.context
+
+  // Commit updated CODEOWNERS file and add/update ref
+  if (!baseBranchName) {
+    const {
+      data: { default_branch }
+    } = await octokit.rest.repos.get({ ...context.repo })
+    baseBranchName = default_branch
+  }
+
+  const {
+    commit: { tree: lastCommitTree },
+    sha: lastCommitSha
+  } = (
+    await octokit.rest.repos.listCommits({
+      ...context.repo,
+      sha: baseBranchName,
+      per_page: 1
+    })
+  ).data[0]
+
+  const pullAuthorName = pullData.user?.login
+
+  const currentCodeowners = await getCodeowners(
+    octokit,
+    context.repo,
+    lastCommitSha,
+    codeownersPath
+  )
+
+  const newTree = await octokit.rest.git.createTree({
+    ...context.repo,
+    base_tree: lastCommitTree.sha,
+    tree: [
+      {
+        path: codeownersPath,
+        mode: '100644',
+        content: updateCodeowners(currentCodeowners, newFiles, pullAuthorName)
+      }
+    ]
+  })
+
+  const newCommit = await octokit.rest.git.createCommit({
+    ...context.repo,
+    message: `chore: add ${pullAuthorName} to CODEOWNERS`,
+    tree: newTree.data.sha,
+    parents: [lastCommitSha]
+  })
+
+  const newRef = `refs/heads/${branchName(newBranchName, pullData.number)}`
+  try {
+    await octokit.rest.git.updateRef({
+      ...context.repo,
+      ref: newRef,
+      sha: newCommit.data.sha,
+      force: true
+    })
+  } catch (error) {
+    if ((error as RequestError).status === 404) {
+      await octokit.rest.git.createRef({
+        ...context.repo,
+        ref: newRef,
+        sha: newCommit.data.sha
+      })
+    }
+    throw error
+  }
+
+  const pullsFromRef = (
+    await octokit.rest.pulls.list({
+      ...context.repo,
+      head: branchName(newBranchName, pullData.number)
+    })
+  ).data
+
+  if (!pullsFromRef.length) {
+    await octokit.rest.pulls.create({
+      ...context.repo,
+      title: `chore: add ${pullAuthorName} to CODEOWNERS`,
+      body: `Reference #${pullData.number}\n/cc @${pullAuthorName}`,
+      base: baseBranchName,
+      head: branchName(newBranchName, pullData.number)
+    })
+  }
 }
