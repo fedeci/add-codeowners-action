@@ -14,7 +14,7 @@ async function run(): Promise<void> {
     const codeownersPath = core.getInput('codeownersPath') || 'CODEOWNERS'
     const context = github.context
 
-    core.debug(`Event: ${context.eventName}.${context.action}`)
+    core.debug(`Event: ${context.eventName}.${context.payload.action}`)
 
     if (context.eventName === 'pull_request') {
       const octokit = github.getOctokit(ghToken)
@@ -29,9 +29,9 @@ async function run(): Promise<void> {
       ).data
 
       if (
-        context.action === 'opened' ||
-        context.action === 'reopened' ||
-        context.action === 'synchronize'
+        context.payload.action === 'opened' ||
+        context.payload.action === 'reopened' ||
+        context.payload.action === 'synchronize'
       ) {
         // assert that the PR author effectively wants to be added as codeowner
         if (!userWantsToBeCodeowner(pullData.body)) {
@@ -46,7 +46,7 @@ async function run(): Promise<void> {
           codeownersPath,
           pullData
         )
-      } else if (context.action === 'closed') {
+      } else if (context.payload.action === 'closed') {
         try {
           await octokit.rest.git.deleteRef({
             ...context.repo,
@@ -57,7 +57,7 @@ async function run(): Promise<void> {
           core.debug(`Could not find ref to delete`)
           // do nothing if e.g. the ref does not exist
         }
-      } else if (context.action === 'edited') {
+      } else if (context.payload.action === 'edited') {
         // refresh the PR
         if (!userWantsToBeCodeowner(pullData.body)) {
           try {

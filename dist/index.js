@@ -47,7 +47,7 @@ function run() {
             const newBranchName = core.getInput('newBranchName') || 'auto-codeowners';
             const codeownersPath = core.getInput('codeownersPath') || 'CODEOWNERS';
             const context = github.context;
-            core.debug(`Event: ${context.eventName}.${context.action}`);
+            core.debug(`Event: ${context.eventName}.${context.payload.action}`);
             if (context.eventName === 'pull_request') {
                 const octokit = github.getOctokit(ghToken);
                 // check if there is any new file
@@ -55,9 +55,9 @@ function run() {
                 if (!pullNumber)
                     throw new Error('Missing PR number.');
                 const pullData = (yield octokit.rest.pulls.get(Object.assign(Object.assign({}, context.repo), { pull_number: pullNumber }))).data;
-                if (context.action === 'opened' ||
-                    context.action === 'reopened' ||
-                    context.action === 'synchronize') {
+                if (context.payload.action === 'opened' ||
+                    context.payload.action === 'reopened' ||
+                    context.payload.action === 'synchronize') {
                     // assert that the PR author effectively wants to be added as codeowner
                     if (!(0, utils_1.userWantsToBeCodeowner)(pullData.body)) {
                         core.debug('User does not want to be a codeowner');
@@ -65,7 +65,7 @@ function run() {
                     }
                     yield (0, utils_1.createOrUpdateCodeownersPr)(octokit, newBranchName, baseBranchName, codeownersPath, pullData);
                 }
-                else if (context.action === 'closed') {
+                else if (context.payload.action === 'closed') {
                     try {
                         yield octokit.rest.git.deleteRef(Object.assign(Object.assign({}, context.repo), { ref: `refs/heads/${(0, utils_1.branchName)(newBranchName, pullNumber)}` }));
                         core.debug(`Closed PR`);
@@ -75,7 +75,7 @@ function run() {
                         // do nothing if e.g. the ref does not exist
                     }
                 }
-                else if (context.action === 'edited') {
+                else if (context.payload.action === 'edited') {
                     // refresh the PR
                     if (!(0, utils_1.userWantsToBeCodeowner)(pullData.body)) {
                         try {
