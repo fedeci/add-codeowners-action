@@ -47,6 +47,7 @@ function run() {
             const newBranchName = core.getInput('newBranchName') || 'auto-codeowners';
             const codeownersPath = core.getInput('codeownersPath') || 'CODEOWNERS';
             const context = github.context;
+            core.debug(`Event: ${context.eventName}.${context.action}`);
             if (context.eventName === 'pull_request') {
                 const octokit = github.getOctokit(ghToken);
                 // check if there is any new file
@@ -58,15 +59,19 @@ function run() {
                     context.action === 'reopened' ||
                     context.action === 'synchronize') {
                     // assert that the PR author effectively wants to be added as codeowner
-                    if (!(0, utils_1.userWantsToBeCodeowner)(pullData.body))
+                    if (!(0, utils_1.userWantsToBeCodeowner)(pullData.body)) {
+                        core.debug('User does not want to be a codeowner');
                         return;
+                    }
                     yield (0, utils_1.createOrUpdateCodeownersPr)(octokit, newBranchName, baseBranchName, codeownersPath, pullData);
                 }
                 else if (context.action === 'closed') {
                     try {
                         yield octokit.rest.git.deleteRef(Object.assign(Object.assign({}, context.repo), { ref: `refs/heads/${(0, utils_1.branchName)(newBranchName, pullNumber)}` }));
+                        core.debug(`Closed PR`);
                     }
                     catch (_b) {
+                        core.debug(`Could not find ref to delete`);
                         // do nothing if e.g. the ref does not exist
                     }
                 }
@@ -75,8 +80,10 @@ function run() {
                     if (!(0, utils_1.userWantsToBeCodeowner)(pullData.body)) {
                         try {
                             yield octokit.rest.git.deleteRef(Object.assign(Object.assign({}, context.repo), { ref: `refs/heads/${(0, utils_1.branchName)(newBranchName, pullNumber)}` }));
+                            core.debug(`Closed PR`);
                         }
                         catch (_c) {
+                            core.debug(`Could not find ref to delete`);
                             // do nothing if e.g. the ref does not exist
                         }
                         return;

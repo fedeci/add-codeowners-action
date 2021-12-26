@@ -14,6 +14,8 @@ async function run(): Promise<void> {
     const codeownersPath = core.getInput('codeownersPath') || 'CODEOWNERS'
     const context = github.context
 
+    core.debug(`Event: ${context.eventName}.${context.action}`)
+
     if (context.eventName === 'pull_request') {
       const octokit = github.getOctokit(ghToken)
       // check if there is any new file
@@ -32,7 +34,10 @@ async function run(): Promise<void> {
         context.action === 'synchronize'
       ) {
         // assert that the PR author effectively wants to be added as codeowner
-        if (!userWantsToBeCodeowner(pullData.body)) return
+        if (!userWantsToBeCodeowner(pullData.body)) {
+          core.debug('User does not want to be a codeowner')
+          return
+        }
 
         await createOrUpdateCodeownersPr(
           octokit,
@@ -47,7 +52,9 @@ async function run(): Promise<void> {
             ...context.repo,
             ref: `refs/heads/${branchName(newBranchName, pullNumber)}`
           })
+          core.debug(`Closed PR`)
         } catch {
+          core.debug(`Could not find ref to delete`)
           // do nothing if e.g. the ref does not exist
         }
       } else if (context.action === 'edited') {
@@ -58,7 +65,9 @@ async function run(): Promise<void> {
               ...context.repo,
               ref: `refs/heads/${branchName(newBranchName, pullNumber)}`
             })
+            core.debug(`Closed PR`)
           } catch {
+            core.debug(`Could not find ref to delete`)
             // do nothing if e.g. the ref does not exist
           }
           return
