@@ -1,8 +1,8 @@
 {
-  "name": "typescript-action",
-  "version": "0.0.0",
+  "name": "add-codeowners-action",
+  "version": "1.0.0",
   "private": true,
-  "description": "TypeScript template action",
+  "description": "A GitHub action to automatically create a PR with the updated CODEOWNERS each time a new file is added in a PR",
   "main": "lib/main.js",
   "scripts": {
     "build": "tsc",
@@ -15,14 +15,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/actions/typescript-action.git"
+    "url": "git+https://github.com/fedeci/add-codeowners-action.git"
   },
   "keywords": [
     "actions",
     "node",
-    "setup"
+    "setup",
+    "codeowners"
   ],
-  "author": "",
+  "author": "Federico Ciardi <fed.ciardi@gmail.com>",
   "license": "MIT",
   "dependencies": {
     "@actions/core": "^1.6.0",
